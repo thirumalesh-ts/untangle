@@ -2,7 +2,7 @@ import { store } from "$lib/store";
 import { json } from "@sveltejs/kit";
 
 export async function GET({ url, params }) {
-  const tag = url.searchParams.get("tag");
+  const promptID = url.searchParams.get("promptID");
   const sessionID = params.session_id;
 
   const session = store.find((s) => s.id === sessionID);
@@ -14,6 +14,6 @@ export async function GET({ url, params }) {
     ok: true,
     id: session.id,
     name: session.name,
-    messages: tag ? session.tags.filter((t) => t.tag === tag) : session.tags
+    threads: promptID ? { promptID : session.threads[promptID] } : session.threads
   });
 }

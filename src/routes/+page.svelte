@@ -3,19 +3,19 @@
   import MessageList from "$lib/components/MessageList.svelte";
   import ErrorBanner from "$lib/components/ErrorBanner.svelte";
   import SidePanel from "$lib/components/SidePanel.svelte";
-  import type { TagThread } from "$lib/types";
+  import type { ChatThread } from "$lib/types";
   import { goto } from "$app/navigation";
   import type { PageData } from "./$types";
   import { onMount } from "svelte";
 
-  // A tag's data as held client-side (keyed by tag, so the tag name is dropped).
-  type Thread = Omit<TagThread, "tag">;
-  // A session as listed in the sidebar — just its tag names, not full threads.
-  type SessionSummary = { id: string; name?: string; description?: string; tags: string[] };
+  
+  type Thread = Omit<ChatThread, "promptID">;
+  
+  type SessionSummary = { id: string; name?: string; description?: string; promptIDs: string[], tags: Record<string, string> };
 
   let { data }: { data: PageData } = $props();
 
-  let current = $state<{ sessionID?: string; tag?: string }>({});
+  let current = $state<{ sessionID?: string; promptID?: string }>({});
 
   let messageCache: Record<string, Record<string, Thread | null>> = $state({});
 
@@ -25,14 +25,14 @@
     current.sessionID ? sessions.find((s) => s.id === current.sessionID) : null
   );
 
-  let currentMessages: Thread | null = $state(null);
+  let currentThread: Thread | null = $state(null);
 
   let activePanel: "formatKeys" | "schema" | null = $state(null);
 
   // Close any open panel when switching tag/session so stale data isn't shown.
   $effect(() => {
     current.sessionID;
-    current.tag;
+    current.promptID;
     activePanel = null;
   });
 
@@ -52,17 +52,17 @@
     if (!data.initial.ok) return;
 
     for (const session of data.initial.sessions) {
-      upsertSession({ id: session.id, name: session.name, description: session.description, tags: session.messages.map((t) => t.tag) });
+      upsertSession({ id: session.id, name: session.name, description: session.description, promptIDs: session.threads.map((t) => t.promptID), tags: Object.fromEntries(session.threads.map((t) => [t.promptID, t.tag ?? t.promptID])) });
 
       messageCache[session.id] = {};
-      for (const thread of session.messages) {
-        messageCache[session.id][thread.tag] = thread;
+      for (const thread of session.threads) {
+        messageCache[session.id][thread.promptID] = thread;
       }
     }
 
     const latest = data.initial.sessions.at(-1);
     if (latest) {
-      current = { sessionID: latest.id, tag: latest.messages.at(-1)?.tag };
+      current = { sessionID: latest.id, promptID: latest.threads.at(-1)?.promptID };
     }
   });
 
@@ -70,30 +70,30 @@
   $effect(() => {
     loadError = null;
 
-    const { sessionID, tag } = current;
+    const { sessionID, promptID } = current;
     if (!sessionID) {
       goto("/", { replaceState: true, noScroll: true });
       return;
     }
 
     // Fall back to the session's last tag if the current one isn't valid.
-    if (!currentSession?.tags.includes(tag ?? "")) {
-      current.tag = currentSession?.tags.at(-1);
+    if (!currentSession?.promptIDs.includes(promptID ?? "")) {
+      current.promptID = currentSession?.promptIDs.at(-1);
     }
-    if (!current.tag) return;
+    if (!current.promptID) return;
 
-    goto(`/?sessionID=${encodeURIComponent(sessionID)}&tag=${encodeURIComponent(current.tag)}`, {
+    goto(`/?sessionID=${encodeURIComponent(sessionID)}&promptID=${encodeURIComponent(current.promptID)}`, {
       replaceState: true,
       noScroll: true
     });
 
-    const cached = messageCache[sessionID]?.[current.tag];
+    const cached = messageCache[sessionID]?.[current.promptID];
     if (cached !== undefined) {
-      currentMessages = cached;
-      loadMessages(sessionID, current.tag); // refresh in the background
+      currentThread = cached;
+      loadMessages(sessionID, current.promptID); // refresh in the background
     } else {
-      loadMessages(sessionID, current.tag).then(() => {
-        currentMessages = messageCache[sessionID]?.[current.tag!] ?? null;
+      loadMessages(sessionID, current.promptID).then(() => {
+        currentThread = messageCache[sessionID]?.[current.promptID!] ?? null;
       });
     }
   });
@@ -112,9 +112,9 @@
     }
   }
 
-  async function loadMessages(sessionID: string, tag: string) {
+  async function loadMessages(sessionID: string, promptID: string) {
     const res = await fetch(
-      `/api/sessions/${encodeURIComponent(sessionID)}/messages?tag=${encodeURIComponent(tag)}`
+      `/api/sessions/${encodeURIComponent(sessionID)}/threads?promptID=${encodeURIComponent(promptID)}`
     );
     const json = await res.json();
     if (!json.ok) {
@@ -122,12 +122,12 @@
       return;
     }
 
-    const thread = (json.messages as TagThread[]).find((m) => m.tag === tag);
+    const thread = (json.threads as Record<string, ChatThread>)[promptID];
     if (!thread) return;
 
     messageCache[json.id] ??= {};
-    messageCache[json.id][tag] = thread;
-    current.tag ??= tag;
+    messageCache[json.id][promptID] = thread;
+    current.promptID ??= promptID;
   }
 
   // Client-only polling so the UI updates when API is hit externally.
@@ -162,7 +162,7 @@
   <div class="app">
     <div class="topbar">
       {#if currentSession?.tags}
-        <TagStrip tags={currentSession.tags} selectedTag={current.tag} onSelect={(id) => { current!.tag = id }} />
+        <TagStrip tags={currentSession.tags} selectedID={current.promptID} onSelect={(id) => { current!.promptID = id }} />
       {/if}
     </div>
 
@@ -170,16 +170,16 @@
       <div class="content">
         <ErrorBanner error={loadError} />
 
-        {#if !current.tag}
+        {#if !current.promptID}
           <div class="hint">Select a tag to view messages.</div>
-        {:else if !currentMessages || currentMessages.messages.length === 0}
-          <div class="hint">No messages for “{current.tag}”.</div>
+        {:else if !currentThread || currentThread.messages.length === 0}
+          <div class="hint">No messages for “{currentSession?.tags[current.promptID]}”.</div>
         {:else}
           <MessageList
-            messages={currentMessages.messages}
-            messagesAt={currentMessages.messagesAt}
-            response={currentMessages.response}
-            responseAt={currentMessages.responseAt}
+            messages={currentThread.messages}
+            messagesAt={currentThread.messagesAt}
+            response={currentThread.response}
+            responseAt={currentThread.responseAt}
           />
         {/if}
       </div>
@@ -187,13 +187,13 @@
       {#if activePanel === 'formatKeys'}
         <SidePanel
           title="Format Keys"
-          data={currentMessages?.formatKeys ?? {}}
+          data={currentThread?.args ?? {}}
           onClose={() => activePanel = null}
         />
       {:else if activePanel === 'schema'}
         <SidePanel
           title="Schema"
-          data={currentMessages?.schema}
+          data={currentThread?.schema}
           onClose={() => activePanel = null}
         />
       {/if}
@@ -201,14 +201,14 @@
       <div class="toolstrip">
         <button
           class="tool {activePanel === 'formatKeys' ? 'active' : ''}"
-          disabled={!current.tag}
+          disabled={!current.promptID}
           onclick={() => activePanel = activePanel === 'formatKeys' ? null : 'formatKeys'}
         >
           Format Keys
         </button>
         <button
           class="tool {activePanel === 'schema' ? 'active' : ''}"
-          disabled={!current.tag || !currentMessages?.schema}
+          disabled={!current.promptID || !currentThread?.schema}
           onclick={() => activePanel = activePanel === 'schema' ? null : 'schema'}
         >
           Schema

@@ -18,7 +18,7 @@ export async function GET({ url }) {
         }, { status: 404 });
     }
 
-    const tags = session.tags.map((t) => t.tag);
+    const tags = Object.values(session.threads).map((t) => t.tag);
     return json({
         ok: true,
         tags

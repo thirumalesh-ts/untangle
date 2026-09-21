@@ -6,14 +6,22 @@ export type ChatMessage = {
   message: MessageContent;
 };
 
-/** A tag's conversation: the request messages and the optional response. */
-export type TagThread = {
-  tag: string;
+export type ValidatorError = {
+  validator: string;
+  response: ChatMessage;
+  errors: Array<string>;
+  createdAt: Date;
+}
+
+export type ChatThread = {
+  promptID: string;
+  tag?: string;
   messages: ChatMessage[];
   messagesAt: Date;
+  validatorErrors?:  Array<ValidatorError>
   response?: ChatMessage;
   responseAt?: Date;
-  formatKeys?: Record<string, unknown>;
+  args?: Record<string, unknown>;
   schema?: Record<string, unknown>;
 };
 
@@ -21,5 +29,5 @@ export type Session = {
   id: string;
   name?: string;
   description?: string;
-  tags: TagThread[];
+  threads: Record<string, ChatThread>;
 };

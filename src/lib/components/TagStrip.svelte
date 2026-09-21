@@ -1,18 +1,21 @@
 <script lang="ts">
-const { tags, selectedTag, onSelect }: {tags: string[], selectedTag?: string, onSelect: (tag: string) => void} = $props();
+const { tags, selectedID, onSelect }: { tags: Record<string, string>, selectedID?: string, onSelect: (id: string) => void } = $props();
+
+let ids = $derived(Object.keys(tags));
+
 </script>
 
 <div class="tagstrip" aria-label="Tags">
-  {#if tags.length === 0}
+  {#if ids.length === 0}
     <div class="tag tag--empty">No tags yet</div>
   {:else}
-    {#each tags as t}
+    {#each ids as id}
       <button
-        class="tag {selectedTag === t ? 'tag--active' : ''}"
-        onclick={() => onSelect(t)}
-        title={t}
+        class="tag {selectedID === id ? 'tag--active' : ''}"
+        onclick={() => onSelect(id)}
+        title={tags[id]}
       >
-        {t}
+        {tags[id]}
       </button>
     {/each}
   {/if}

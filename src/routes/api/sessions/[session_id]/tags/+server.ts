@@ -13,6 +13,6 @@ export async function GET({ params }) {
     ok: true,
     id: session.id,
     name: session.name,
-    tags: session.tags.map((t) => t.tag)
+    tags: Object.values(session.threads).map((t) => t.tag)
   });
 }

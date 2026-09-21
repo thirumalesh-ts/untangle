@@ -1,7 +1,7 @@
 import type { PageLoad } from "./$types";
-import type { Session, TagThread } from "$lib/types";
+import type { Session, ChatThread } from "$lib/types";
 
-type LoadedSession = Omit<Session, "tags"> & { messages: TagThread[] };
+type LoadedSession = Omit<Session, "tags"> & { threads: ChatThread[] };
 
 type LoadResult =
   | { ok: true; sessions: LoadedSession[] }
@@ -15,7 +15,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
   if (sessionID && tag) params.set("tag", tag);
 
   const query = params.toString();
-  const res = await fetch(`/api/messages${query ? `?${query}` : ""}`);
+  const res = await fetch(`/api/threads${query ? `?${query}` : ""}`);
   const data = await res.json();
 
   const initial: LoadResult = data?.ok

@@ -14,7 +14,7 @@ export async function POST({ request }) {
     session.name = name;
     session.description = description;
   } else {
-    store.push({ id, name, description, tags: [] });
+    store.push({ id, name, description, threads: {} });
   }
 
   return json(
@@ -34,7 +34,7 @@ export async function GET() {
       id: s.id,
       name: s.name,
       description: s.description,
-      tags: s.tags.map((t) => t.tag)
+      promptIDs: Object.keys(s.threads)
     }))
   });
 }
