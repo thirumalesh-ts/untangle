@@ -21,7 +21,7 @@ export async function POST({ request }) {
 
   const session = store.find((s) => s.id === sessionID);
   if (!session) {
-    store.push({ id: sessionID, threads: { promptID: thread } });
+    store.push({ id: sessionID, threads: { [promptID]: thread } });
   } else {
     if (session.threads[promptID] !== undefined) {
       return json({
@@ -49,7 +49,7 @@ export async function GET({ url }) {
       id: s.id,
       name: s.name,
       description: s.description,
-      threads: promptID ? { promptID: s.threads[promptID] } : s.threads
+      threads: promptID ? { [promptID]: s.threads[promptID] } : s.threads
     }));
 
   return json({ ok: true, sessions });

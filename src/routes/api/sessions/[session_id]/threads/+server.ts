@@ -10,10 +10,14 @@ export async function GET({ url, params }) {
     return json({ ok: false, error: `Session with id ${sessionID} not found` }, { status: 404 });
   }
 
+  const thread = promptID
+    ? (session.threads[promptID] ?? Object.values(session.threads).find((t) => t.promptID === promptID))
+    : undefined;
+
   return json({
     ok: true,
     id: session.id,
     name: session.name,
-    threads: promptID ? { promptID : session.threads[promptID] } : session.threads
+    threads: promptID ? { [promptID]: thread } : session.threads
   });
 }

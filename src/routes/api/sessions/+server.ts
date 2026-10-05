@@ -34,7 +34,10 @@ export async function GET() {
       id: s.id,
       name: s.name,
       description: s.description,
-      promptIDs: Object.keys(s.threads)
+      promptIDs: Object.values(s.threads).map((t) => t.promptID),
+      tags: Object.fromEntries(
+        Object.values(s.threads).map((t) => [t.promptID, t.tag ?? t.promptID])
+      )
     }))
   });
 }

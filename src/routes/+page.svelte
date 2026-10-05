@@ -6,7 +6,7 @@
   import type { ChatThread } from "$lib/types";
   import { goto } from "$app/navigation";
   import type { PageData } from "./$types";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
 
   
   type Thread = Omit<ChatThread, "promptID">;
@@ -43,6 +43,9 @@
     const existing = sessions.find((s) => s.id === summary.id);
     if (existing) {
       existing.tags = summary.tags;
+      if (existing.promptIDs.join() !== summary.promptIDs.join()) {
+        existing.promptIDs = summary.promptIDs;
+      }
     } else {
       sessions.unshift(summary);
     }
@@ -52,17 +55,19 @@
     if (!data.initial.ok) return;
 
     for (const session of data.initial.sessions) {
-      upsertSession({ id: session.id, name: session.name, description: session.description, promptIDs: session.threads.map((t) => t.promptID), tags: Object.fromEntries(session.threads.map((t) => [t.promptID, t.tag ?? t.promptID])) });
+      const threadList = Object.values(session.threads ?? {});
+      upsertSession({ id: session.id, name: session.name, description: session.description, promptIDs: threadList.map((t) => t.promptID), tags: Object.fromEntries(threadList.map((t) => [t.promptID, t.tag ?? t.promptID])) });
 
       messageCache[session.id] = {};
-      for (const thread of session.threads) {
+      for (const thread of threadList) {
         messageCache[session.id][thread.promptID] = thread;
       }
     }
 
     const latest = data.initial.sessions.at(-1);
     if (latest) {
-      current = { sessionID: latest.id, promptID: latest.threads.at(-1)?.promptID };
+      const latestThreads = Object.values(latest.threads ?? {});
+      current = { sessionID: latest.id, promptID: latestThreads.at(-1)?.promptID };
     }
   });
 
@@ -70,32 +75,34 @@
   $effect(() => {
     loadError = null;
 
-    const { sessionID, promptID } = current;
+    const sessionID = current.sessionID;
+    const promptID = current.promptID;
+
     if (!sessionID) {
-      goto("/", { replaceState: true, noScroll: true });
+      if (location.search) goto("/", { replaceState: true, noScroll: true });
       return;
     }
 
-    // Fall back to the session's last tag if the current one isn't valid.
+    // Fall back to the session's last tag if the current one isn't valid; re-runs once repaired.
     if (!currentSession?.promptIDs.includes(promptID ?? "")) {
-      current.promptID = currentSession?.promptIDs.at(-1);
+      const fallback = currentSession?.promptIDs.at(-1);
+      if (fallback !== promptID) current.promptID = fallback;
+      return;
     }
-    if (!current.promptID) return;
 
-    goto(`/?sessionID=${encodeURIComponent(sessionID)}&promptID=${encodeURIComponent(current.promptID)}`, {
-      replaceState: true,
-      noScroll: true
+    const search = `?sessionID=${encodeURIComponent(sessionID)}&promptID=${encodeURIComponent(promptID!)}`;
+    if (location.search !== search) {
+      goto(`/${search}`, { replaceState: true, noScroll: true });
+    }
+
+    const cached = untrack(() => messageCache[sessionID]?.[promptID!]);
+    if (cached !== undefined) currentThread = cached;
+
+    loadMessages(sessionID, promptID!).then(() => {
+      if (current.sessionID === sessionID && current.promptID === promptID) {
+        currentThread = untrack(() => messageCache[sessionID]?.[promptID!]) ?? currentThread;
+      }
     });
-
-    const cached = messageCache[sessionID]?.[current.promptID];
-    if (cached !== undefined) {
-      currentThread = cached;
-      loadMessages(sessionID, current.promptID); // refresh in the background
-    } else {
-      loadMessages(sessionID, current.promptID).then(() => {
-        currentThread = messageCache[sessionID]?.[current.promptID!] ?? null;
-      });
-    }
   });
 
   async function getAllSessions() {

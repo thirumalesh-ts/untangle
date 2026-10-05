@@ -6,7 +6,7 @@
 
   const isString = (x: unknown): x is string => typeof x === "string";
   
-  $: rendered = message.map((block) => isString(block) ? block : JSON.stringify(block, null, 2))
+  $: rendered = (message ?? []).map((block) => isString(block) ? block : JSON.stringify(block, null, 2))
 
   $: align =
     role === "system" ? "center" :
